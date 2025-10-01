@@ -1,0 +1,45 @@
+name: Willow Live Json
+
+on:
+  schedule:
+    - cron: '*/20 * * * *' # Runs every 20 minutes
+  push:
+    branches:
+      - main
+
+jobs:
+  fetch_and_upload:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }} # Use the GitHub token for authentication
+
+    - name: Install jq
+      run: sudo apt-get install -y jq
+
+    - name: Remove existing files
+      run: rm -f willowlive.json
+
+    - name: Configure Git
+      run: |
+        git config --global user.name "auto-update-bot"
+        git config --global user.email "auto-update-bot@users.noreply.github.com"
+        git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/abid58b/WillowLivePlaylist.git
+    - name: Fetch data from APIs
+      run: |
+        curl -o willowlive.json ${{ secrets.WILLOWLIVE_JSON_API }}
+        curl -s "$JSON_URL" | jq 'del(.telegram)' > willowlive.json
+    - name: Commit and push changes
+      run: |
+        git add willowlive.json
+        git fetch origin main
+        git reset --soft origin/main
+        if git diff --cached --quiet; then
+          echo "No changes to commit json"
+        else
+          git commit -m "Fetch latest data json"
+          git push origin main
+        fi
