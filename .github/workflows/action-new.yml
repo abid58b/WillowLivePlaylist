@@ -1,0 +1,83 @@
+name: Generate WillowLive M3U from JSON
+
+on:
+  schedule:
+    - cron: '*/10 * * * *' # Har 20 minute baad run karega
+  push:
+    branches:
+      - main # Jab main branch par push hoga tab run karega
+    paths:
+      - 'willowlive.json' # Khaas taur par jab fancode.json update ho tab trigger karega
+
+jobs:
+  generate_playlist_from_json:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }} # Same repository mein push karne ke liye
+
+    - name: Remove existing files
+      run: rm -f willowlive.m3u
+
+    - name: Configure Git for commits
+      run: |
+        git config --global user.name "auto-update-bot"
+        git config --global user.email "auto-update-bot@users.noreply.github.com"
+        git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/abid58b/WillowLivePlaylist.git
+
+    - name: Ensure jq is installed
+      run: sudo apt-get update && sudo apt-get install -y jq
+
+    - name: Check for willowlive.json existence
+      id: check_json_file
+      run: |
+        if [ ! -f willowlive.json ]; then
+          echo "willowlive.json not found! Skipping M3U generation."
+          echo "file_found=false" >> $GITHUB_OUTPUT
+        else
+          echo "willowlive.json found. Proceeding with M3U generation."
+          echo "file_found=true" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Generate M3U from JSON and Modify URLs
+      if: steps.check_json_file.outputs.file_found == 'true'
+      run: |
+        echo "#EXTM3U" > willowlive.m3u
+
+        # Modified jq query to filter by status STARTED
+        jq -r '
+            .matches[] | 
+            {
+              "title": .name,
+              "logo": .cover,
+              "key": .playback_data.keys[0],
+              "url": .playback_data.urls[0].url
+            } |
+            "
+        #EXTINF:-1 tvg-logo=\"\(.logo)\" group-title=\"Live\",\(.title)
+        #KODIPROP:inputstream=inputstream.adaptive
+        #KODIPROP:inputstreamaddon=inputstream.adaptive
+        #KODIPROP:inputstream.adaptive.manifest_type=mpd
+        #KODIPROP:inputstream.adaptive.license_type=clearkey
+        #KODIPROP:inputstream.adaptive.license_key=\(.key)
+        \(.url)
+        "
+      
+    - name: Commit and push generated M3U file
+      if: steps.check_json_file.outputs.file_found == 'true'
+      run: |
+        git add willowlive.m3u
+
+        if git diff --cached --quiet; then
+          echo "No changes to willowlive.m3u to commit."
+        else
+          git fetch origin main
+          git reset --soft origin/main
+          git commit -m "Auto-generated: WillowLive M3U playlist from JSON data"
+          git push origin main
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
