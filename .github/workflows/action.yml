@@ -30,8 +30,7 @@ jobs:
         git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/abid58b/WillowLivePlaylist.git
     - name: Fetch data from APIs
       run: |
-        curl -o willowlive.json ${{ secrets.WILLOWLIVE_JSON_API }}
-        curl -s "$JSON_URL" | jq 'del(.telegram)' > willowlive.json
+        curl -s ${{ secrets.WILLOWLIVE_JSON_API }} | jq 'del(.telegram)' > willowlive.json
     - name: Commit and push changes
       run: |
         git add willowlive.json
